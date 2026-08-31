@@ -1,6 +1,6 @@
 """Execução sequencial das camadas Bronze, Silver e Gold."""
 
-from alfabetizacao.jobs import bronze, gold, silver
+from alfabetizacao.batch import bronze, gold, silver
 
 
 def juntar_caminho(pasta, nome):

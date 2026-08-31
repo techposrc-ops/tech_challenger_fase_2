@@ -43,6 +43,57 @@ COLUNAS_DECIMAIS = [
     "proporcao_aluno_nivel_8",
 ]
 
+COLUNAS_PERCENTUAIS = [
+    "taxa_alfabetizacao",
+    "percentual_participacao",
+    "meta_alfabetizacao_2024",
+    "meta_alfabetizacao_2025",
+    "meta_alfabetizacao_2026",
+    "meta_alfabetizacao_2027",
+    "meta_alfabetizacao_2028",
+    "meta_alfabetizacao_2029",
+    "meta_alfabetizacao_2030",
+    "proporcao_aluno_nivel_0",
+    "proporcao_aluno_nivel_1",
+    "proporcao_aluno_nivel_2",
+    "proporcao_aluno_nivel_3",
+    "proporcao_aluno_nivel_4",
+    "proporcao_aluno_nivel_5",
+    "proporcao_aluno_nivel_6",
+    "proporcao_aluno_nivel_7",
+    "proporcao_aluno_nivel_8",
+]
+
+UF_POR_CODIGO_IBGE = {
+    "11": "RO",
+    "12": "AC",
+    "13": "AM",
+    "14": "RR",
+    "15": "PA",
+    "16": "AP",
+    "17": "TO",
+    "21": "MA",
+    "22": "PI",
+    "23": "CE",
+    "24": "RN",
+    "25": "PB",
+    "26": "PE",
+    "27": "AL",
+    "28": "SE",
+    "29": "BA",
+    "31": "MG",
+    "32": "ES",
+    "33": "RJ",
+    "35": "SP",
+    "41": "PR",
+    "42": "SC",
+    "43": "RS",
+    "50": "MS",
+    "51": "MT",
+    "52": "GO",
+    "53": "DF",
+}
+
 
 def juntar_caminho(pasta, nome):
     return f"{str(pasta).rstrip('/')}/{nome}"
@@ -96,10 +147,86 @@ def validar_tabela(nome_tabela, dataframe):
     for chave in chaves[1:]:
         filtro_nulos = filtro_nulos | col(chave).isNull()
 
+    filtro_percentuais = None
+    for nome_coluna in COLUNAS_PERCENTUAIS:
+        if nome_coluna in dataframe.columns:
+            percentual_invalido = (
+                (col(nome_coluna) < 0) | (col(nome_coluna) > 100)
+            )
+            if filtro_percentuais is None:
+                filtro_percentuais = percentual_invalido
+            else:
+                filtro_percentuais = filtro_percentuais | percentual_invalido
+
+    percentuais_invalidos = 0
+    if filtro_percentuais is not None:
+        percentuais_invalidos = dataframe.filter(filtro_percentuais).count()
+
     return {
         "registros": total,
         "duplicidades": total - total_sem_duplicidade,
         "chaves_nulas": dataframe.filter(filtro_nulos).count(),
+        "percentuais_invalidos": percentuais_invalidos,
+    }
+
+
+def adicionar_sigla_uf(dataframe):
+    """Obtém a UF usando os dois primeiros números do município."""
+    codigo_uf = col("id_municipio").substr(1, 2)
+    sigla_uf = None
+
+    for codigo, sigla in UF_POR_CODIGO_IBGE.items():
+        if sigla_uf is None:
+            sigla_uf = when(codigo_uf == codigo, sigla)
+        else:
+            sigla_uf = sigla_uf.when(codigo_uf == codigo, sigla)
+
+    return dataframe.withColumn("_sigla_uf", sigla_uf)
+
+
+def validar_relacionamentos(tabelas_silver):
+    """Valida alunos com municípios e municípios com UFs."""
+    municipios_existentes = tabelas_silver["municipio"].select(
+        "ano",
+        "id_municipio",
+    ).dropDuplicates()
+
+    alunos_sem_municipio = (
+        tabelas_silver["alunos"]
+        .join(
+            municipios_existentes,
+            ["ano", "id_municipio"],
+            "left_anti",
+        )
+        .count()
+    )
+
+    ufs_existentes = (
+        tabelas_silver["uf"]
+        .select("ano", "sigla_uf")
+        .dropDuplicates()
+    )
+    municipios_com_uf = adicionar_sigla_uf(
+        tabelas_silver["municipio"]
+    ).select(
+        "ano",
+        "id_municipio",
+        "_sigla_uf",
+    ).dropDuplicates()
+
+    municipios_sem_uf = (
+        municipios_com_uf.join(
+            ufs_existentes,
+            (municipios_com_uf["ano"] == ufs_existentes["ano"])
+            & (municipios_com_uf["_sigla_uf"] == ufs_existentes["sigla_uf"]),
+            "left_anti",
+        )
+        .count()
+    )
+
+    return {
+        "alunos_sem_municipio": alunos_sem_municipio,
+        "municipios_sem_uf": municipios_sem_uf,
     }
 
 
@@ -122,6 +249,7 @@ def ler_carga_mais_recente(spark, pasta_bronze, nome_tabela):
 
 def executar(spark, pasta_bronze, pasta_silver):
     resultado = {}
+    tabelas_silver = {}
 
     for nome_tabela in CHAVES_TABELAS:
         dataframe_bronze = ler_carga_mais_recente(
@@ -133,10 +261,13 @@ def executar(spark, pasta_bronze, pasta_silver):
         caminho_saida = juntar_caminho(pasta_silver, nome_tabela)
 
         dataframe_silver.write.mode("overwrite").parquet(caminho_saida)
+        tabelas_silver[nome_tabela] = dataframe_silver
 
         resultado[nome_tabela] = {
             "caminho": caminho_saida,
             **validar_tabela(nome_tabela, dataframe_silver),
         }
+
+    resultado["relacionamentos"] = validar_relacionamentos(tabelas_silver)
 
     return resultado

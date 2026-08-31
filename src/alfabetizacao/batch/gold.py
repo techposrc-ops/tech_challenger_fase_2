@@ -19,6 +19,9 @@ TABELAS_SILVER = [
     "meta_alfabetizacao_brasil",
 ]
 
+ANOS_METAS = range(2024, 2031)
+COLUNAS_METAS = [f"meta_alfabetizacao_{ano}" for ano in ANOS_METAS]
+
 
 def juntar_caminho(pasta, nome):
     return f"{str(pasta).rstrip('/')}/{nome}"
@@ -57,32 +60,18 @@ def criar_indicadores_municipio(tabelas_silver):
         "id_municipio",
         "nivel_alfabetizacao",
         "percentual_participacao",
-        "meta_alfabetizacao_2024",
+        *COLUNAS_METAS,
     )
 
-    return (
+    indicadores_municipio = (
         alunos_municipais.join(
             resultado_municipio,
             ["ano", "id_municipio"],
             "left",
         )
         .join(metas_municipio, ["ano", "id_municipio"], "left")
-        .withColumn(
-            "meta_do_ano",
-            when(col("ano") == 2024, col("meta_alfabetizacao_2024")),
-        )
-        .withColumn(
-            "diferenca_para_meta",
-            round(col("taxa_oficial") - col("meta_do_ano"), 2),
-        )
-        .withColumn(
-            "situacao_meta",
-            when(col("meta_do_ano").isNull(), "Sem meta")
-            .when(col("taxa_oficial") >= col("meta_do_ano"), "Atingida")
-            .otherwise("Não atingida"),
-        )
-        .withColumn("_data_criacao_gold", current_timestamp())
     )
+    return adicionar_comparacao_meta(indicadores_municipio)
 
 
 def criar_indicadores_uf(tabelas_silver):
@@ -101,7 +90,7 @@ def criar_indicadores_uf(tabelas_silver):
         "ano",
         "sigla_uf",
         "percentual_participacao",
-        "meta_alfabetizacao_2024",
+        *COLUNAS_METAS,
     )
 
     return adicionar_comparacao_meta(
@@ -114,17 +103,25 @@ def criar_indicadores_brasil(tabelas_silver):
         "ano",
         col("taxa_alfabetizacao").alias("taxa_oficial"),
         "percentual_participacao",
-        "meta_alfabetizacao_2024",
+        *COLUNAS_METAS,
     )
     return adicionar_comparacao_meta(brasil)
 
 
 def adicionar_comparacao_meta(dataframe):
-    return (
-        dataframe.withColumn(
-            "meta_do_ano",
-            when(col("ano") == 2024, col("meta_alfabetizacao_2024")),
+    meta_do_ano = when(
+        col("ano") == 2024,
+        col("meta_alfabetizacao_2024"),
+    )
+
+    for ano in range(2025, 2031):
+        meta_do_ano = meta_do_ano.when(
+            col("ano") == ano,
+            col(f"meta_alfabetizacao_{ano}"),
         )
+
+    return (
+        dataframe.withColumn("meta_do_ano", meta_do_ano)
         .withColumn(
             "diferenca_para_meta",
             round(col("taxa_oficial") - col("meta_do_ano"), 2),

@@ -1,4 +1,4 @@
-from pyspark.sql.functions import col, current_timestamp, max, trim, when
+from pyspark.sql.functions import col, current_timestamp, lit, max, trim, when
 
 CHAVES_TABELAS = {
     "alunos": ["ano", "id_aluno"],
@@ -138,16 +138,21 @@ def tratar_tabela(nome_tabela, dataframe):
     )
 
 
-def validar_tabela(nome_tabela, dataframe):
+def criar_filtro_chaves_nulas(nome_tabela):
+    """Cria a condição usada para localizar chaves nulas."""
     chaves = CHAVES_TABELAS[nome_tabela]
-    total = dataframe.count()
-    total_sem_duplicidade = dataframe.dropDuplicates(chaves).count()
-
     filtro_nulos = col(chaves[0]).isNull()
+
     for chave in chaves[1:]:
         filtro_nulos = filtro_nulos | col(chave).isNull()
 
+    return filtro_nulos
+
+
+def criar_filtro_percentuais_invalidos(dataframe):
+    """Cria a condição para percentuais menores que 0 ou maiores que 100."""
     filtro_percentuais = None
+
     for nome_coluna in COLUNAS_PERCENTUAIS:
         if nome_coluna in dataframe.columns:
             percentual_invalido = (
@@ -157,6 +162,52 @@ def validar_tabela(nome_tabela, dataframe):
                 filtro_percentuais = percentual_invalido
             else:
                 filtro_percentuais = filtro_percentuais | percentual_invalido
+
+    return filtro_percentuais
+
+
+def adicionar_validacao(nome_tabela, dataframe):
+    """Marca registros válidos e informa o motivo dos inválidos."""
+    chaves_nulas = criar_filtro_chaves_nulas(nome_tabela)
+    percentuais_invalidos = criar_filtro_percentuais_invalidos(dataframe)
+
+    if percentuais_invalidos is None:
+        percentuais_invalidos = lit(False)
+
+    motivo = (
+        when(
+            chaves_nulas & percentuais_invalidos,
+            "Chave obrigatória nula; Percentual fora do intervalo 0 a 100",
+        )
+        .when(chaves_nulas, "Chave obrigatória nula")
+        .when(
+            percentuais_invalidos,
+            "Percentual fora do intervalo 0 a 100",
+        )
+    )
+
+    return (
+        dataframe.withColumn("_motivo_invalido", motivo)
+        .withColumn(
+            "_registro_valido",
+            col("_motivo_invalido").isNull(),
+        )
+    )
+
+
+def separar_registros(dataframe):
+    """Separa os registros que seguem no pipeline dos rejeitados."""
+    registros_validos = dataframe.filter(col("_registro_valido"))
+    registros_rejeitados = dataframe.filter(~col("_registro_valido"))
+    return registros_validos, registros_rejeitados
+
+
+def validar_tabela(nome_tabela, dataframe):
+    chaves = CHAVES_TABELAS[nome_tabela]
+    total = dataframe.count()
+    total_sem_duplicidade = dataframe.dropDuplicates(chaves).count()
+    filtro_nulos = criar_filtro_chaves_nulas(nome_tabela)
+    filtro_percentuais = criar_filtro_percentuais_invalidos(dataframe)
 
     percentuais_invalidos = 0
     if filtro_percentuais is not None:
@@ -257,15 +308,32 @@ def executar(spark, pasta_bronze, pasta_silver):
             pasta_bronze,
             nome_tabela,
         )
-        dataframe_silver = tratar_tabela(nome_tabela, dataframe_bronze)
+        dataframe_tratado = tratar_tabela(nome_tabela, dataframe_bronze)
+        dataframe_validado = adicionar_validacao(
+            nome_tabela,
+            dataframe_tratado,
+        )
+        dataframe_silver, dataframe_rejeitados = separar_registros(
+            dataframe_validado
+        )
         caminho_saida = juntar_caminho(pasta_silver, nome_tabela)
+        caminho_rejeitados = juntar_caminho(
+            pasta_silver,
+            f"_rejeitados/{nome_tabela}",
+        )
 
         dataframe_silver.write.mode("overwrite").parquet(caminho_saida)
+        dataframe_rejeitados.write.mode("overwrite").parquet(
+            caminho_rejeitados
+        )
         tabelas_silver[nome_tabela] = dataframe_silver
 
         resultado[nome_tabela] = {
             "caminho": caminho_saida,
-            **validar_tabela(nome_tabela, dataframe_silver),
+            "caminho_rejeitados": caminho_rejeitados,
+            "registros_validos": dataframe_silver.count(),
+            "registros_rejeitados": dataframe_rejeitados.count(),
+            **validar_tabela(nome_tabela, dataframe_validado),
         }
 
     resultado["relacionamentos"] = validar_relacionamentos(tabelas_silver)

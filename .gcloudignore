@@ -1,0 +1,15 @@
+**
+
+!.gcloudignore
+!cloud/
+!cloud/gcp/
+!cloud/gcp/cloud_build/
+!cloud/gcp/cloud_build/produtor.yaml
+!cloud/gcp/cloud_run/
+!cloud/gcp/cloud_run/Dockerfile
+!src/
+!src/alfabetizacao/
+!src/alfabetizacao/__init__.py
+!src/alfabetizacao/streaming/
+!src/alfabetizacao/streaming/__init__.py
+!src/alfabetizacao/streaming/producer.py

@@ -19,8 +19,33 @@ variable "subnet_cidr" {
   type    = string
   default = "10.20.0.0/20"
 }
+variable "artifact_registry_repository" {
+  description = "Nome do repositório Docker no Artifact Registry."
+  type        = string
+  default     = "alfabetizacao"
+}
 variable "enable_streaming" {
-  description = "Cria Kafka, cluster Dataproc Streaming, Cloud Run e orquestração Streaming."
+  description = "Compatibilidade: ativa todos os recursos de streaming. Prefira os controles separados."
+  type        = bool
+  default     = false
+}
+variable "enable_kafka" {
+  description = "Cria somente o cluster Kafka gerenciado e o tópico."
+  type        = bool
+  default     = false
+}
+variable "enable_streaming_producer" {
+  description = "Implanta o produtor Kafka no Cloud Run quando imagem e bootstrap forem informados."
+  type        = bool
+  default     = false
+}
+variable "enable_streaming_consumer" {
+  description = "Cria o cluster Dataproc usado pelo consumidor PySpark."
+  type        = bool
+  default     = false
+}
+variable "enable_streaming_orchestration" {
+  description = "Cria Scheduler e Workflow após o produtor estar disponível."
   type        = bool
   default     = false
 }

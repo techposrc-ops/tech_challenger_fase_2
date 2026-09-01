@@ -1,0 +1,17 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - cloud/gcp/cloud_run/Dockerfile
+      - --tag
+      - ${_IMAGEM}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGEM}
+
+images:
+  - ${_IMAGEM}

@@ -1,0 +1,13 @@
+main:
+  params: [args]
+  steps:
+    - start_producer:
+        call: http.post
+        args:
+          url: ${args.producer_url}
+          auth:
+            type: OIDC
+        result: producer_result
+    - finish:
+        return:
+          producer_status: ${producer_result.code}

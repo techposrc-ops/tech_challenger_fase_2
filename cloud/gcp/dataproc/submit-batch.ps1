@@ -1,8 +1,11 @@
 param(
-    [string]$Projeto = "lively-welder-507300-u4",
+    [Parameter(Mandatory = $true)]
+    [string]$Projeto,
     [string]$Regiao = "us-central1",
-    [string]$Bucket = "alfabetizacao-dev-429919068824",
-    [string]$ContaServico = "alfabetizacao-dev-batch@lively-welder-507300-u4.iam.gserviceaccount.com",
+    [Parameter(Mandatory = $true)]
+    [string]$Bucket,
+    [Parameter(Mandatory = $true)]
+    [string]$ContaServico,
     [string]$Subrede = "alfabetizacao-dev-subnet",
     [switch]$Executar
 )

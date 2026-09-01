@@ -9,12 +9,14 @@ for publicada. Kafka e Dataproc têm custo enquanto provisionados e a imagem exi
 ```powershell
 gcloud auth application-default login
 Copy-Item terraform.tfvars.example terraform.tfvars
-terraform init
+terraform init -backend-config="bucket=SEU_BUCKET_DE_ESTADO"
 terraform fmt -check
 terraform validate
 terraform plan -out=tfplan
 ```
 
-Preencha o projeto, revise preços e plano antes de executar `apply`; o projeto nunca o executa
-automaticamente. Para o streaming, envie `spark_job.py` e o login handler oficial ao bucket e use
+O bucket de estado deve existir antes do `terraform init`. Se o backend já tiver sido inicializado
+com outro bucket, acrescente `-reconfigure` ao comando. Preencha o projeto, revise preços e plano
+antes de executar `apply`; o projeto nunca o executa automaticamente. Para o streaming, envie
+`spark_job.py` e o login handler oficial ao bucket e use
 `cloud/gcp/dataproc/submit-streaming.ps1`.

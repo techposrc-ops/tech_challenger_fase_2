@@ -165,7 +165,7 @@ def produzir():
             duracao_segundos=round(time.perf_counter() - inicio, 2),
             erro=str(erro),
         )
-        return jsonify({"erro": str(erro)}), 500
+        return jsonify({"erro": "Falha interna ao publicar os eventos."}), 500
 
     registrar_evento(
         "pipeline_fim",

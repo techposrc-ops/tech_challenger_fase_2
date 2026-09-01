@@ -105,11 +105,12 @@ def executar_pipeline(
             spark=spark,
             pasta_bronze=pasta_bronze,
             pasta_silver=pasta_silver,
+            id_execucao=id_execucao,
         )
         tabelas_silver = [
             tabela
             for nome, tabela in resultado_silver.items()
-            if nome != "relacionamentos"
+            if nome in silver.CHAVES_TABELAS
         ]
         registros_silver = sum(
             tabela.get("registros_validos", 0)
@@ -131,6 +132,21 @@ def executar_pipeline(
             quantidade_registros=registros_silver,
             quantidade_rejeitados=rejeitados_silver,
         )
+        registrar_evento(
+            "qualidade_dados",
+            "batch",
+            id_execucao=id_execucao,
+            status=(
+                "falha"
+                if resultado_silver["qualidade"]["erros_criticos"]
+                else "sucesso"
+            ),
+            quantidade_registros=registros_silver,
+            quantidade_rejeitados=rejeitados_silver,
+            erros_criticos=resultado_silver["qualidade"]["erros_criticos"],
+            caminho_relatorio=resultado_silver["qualidade"]["caminho"],
+        )
+        silver.validar_erros_criticos(resultado_silver)
 
         inicio_camada = time.perf_counter()
         resultado_gold = gold.executar(

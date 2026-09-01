@@ -194,12 +194,17 @@ resource "google_project_iam_member" "batch_roles" {
     "roles/bigquery.readSessionUser",
     "roles/dataproc.worker",
     "roles/logging.logWriter",
-    "roles/monitoring.metricWriter",
-    "roles/storage.objectAdmin"
+    "roles/monitoring.metricWriter"
   ])
   project = var.gcp_project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.batch.email}"
+}
+
+resource "google_storage_bucket_iam_member" "batch_data_lake" {
+  bucket = google_storage_bucket.data_lake.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.batch.email}"
 }
 
 resource "google_bigquery_dataset_iam_member" "batch_editor" {
@@ -217,13 +222,10 @@ resource "google_service_account" "streaming" {
 resource "google_project_iam_member" "streaming_roles" {
   for_each = local.create_streaming_runtime ? setunion(
     toset([
-      "roles/managedkafka.client",
-      "roles/iam.serviceAccountTokenCreator",
-      "roles/iam.serviceAccountOpenIdTokenCreator"
+      "roles/managedkafka.client"
     ]),
     local.deploy_consumer ? toset([
       "roles/dataproc.worker",
-      "roles/storage.objectAdmin",
       "roles/logging.logWriter",
       "roles/monitoring.metricWriter"
     ]) : toset([])
@@ -231,6 +233,24 @@ resource "google_project_iam_member" "streaming_roles" {
   project = var.gcp_project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.streaming[0].email}"
+}
+
+resource "google_service_account_iam_member" "streaming_token_self" {
+  for_each = local.create_streaming_runtime ? toset([
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/iam.serviceAccountOpenIdTokenCreator"
+  ]) : toset([])
+
+  service_account_id = google_service_account.streaming[0].name
+  role               = each.value
+  member             = "serviceAccount:${google_service_account.streaming[0].email}"
+}
+
+resource "google_storage_bucket_iam_member" "streaming_data_lake" {
+  count  = local.deploy_consumer ? 1 : 0
+  bucket = google_storage_bucket.data_lake.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.streaming[0].email}"
 }
 
 resource "google_managed_kafka_cluster" "streaming" {

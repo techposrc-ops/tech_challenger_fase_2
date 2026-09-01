@@ -34,6 +34,9 @@ Copy-Item `
     (Join-Path $RaizProjeto "src\alfabetizacao\__init__.py") `
     $PastaAlfabetizacao
 Copy-Item `
+    (Join-Path $RaizProjeto "src\alfabetizacao\observabilidade.py") `
+    $PastaAlfabetizacao
+Copy-Item `
     (Join-Path $RaizProjeto "src\alfabetizacao\batch\*.py") `
     $PastaBatch
 

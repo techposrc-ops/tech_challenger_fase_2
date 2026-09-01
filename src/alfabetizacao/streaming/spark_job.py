@@ -1,11 +1,27 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import time
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, dayofmonth, from_json, hour, month, to_timestamp, year
 from pyspark.sql.types import DoubleType, IntegerType, LongType, StringType, StructField, StructType
+
+
+def registrar_evento(tipo, **dados):
+    """Escreve um evento JSON no log do job PySpark."""
+    evento = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "severity": "ERROR" if dados.get("status") == "falha" else "INFO",
+        "tipo": tipo,
+        "pipeline": "streaming_consumidor",
+        **dados,
+    }
+    print(json.dumps(evento, ensure_ascii=False, default=str), flush=True)
 
 
 def criar_esquema_evento():
@@ -47,8 +63,7 @@ def ler_argumentos():
     return argumentos
 
 
-def principal():
-    argumentos = ler_argumentos()
+def executar_streaming(argumentos):
     spark = SparkSession.builder.appName("alfabetizacao-kafka-streaming").getOrCreate()
     leitura_kafka = (
         spark.readStream.format("kafka")
@@ -100,6 +115,37 @@ def principal():
             consulta.stop()
     else:
         consulta.awaitTermination()
+
+    progresso = consulta.lastProgress or {}
+    quantidade = progresso.get("numInputRows", 0)
+    spark.stop()
+    return quantidade
+
+
+def principal():
+    argumentos = ler_argumentos()
+    id_execucao = str(uuid4())
+    inicio = time.perf_counter()
+    registrar_evento("pipeline_inicio", id_execucao=id_execucao)
+
+    try:
+        quantidade = executar_streaming(argumentos)
+        registrar_evento(
+            "pipeline_fim",
+            id_execucao=id_execucao,
+            status="sucesso",
+            duracao_segundos=round(time.perf_counter() - inicio, 2),
+            quantidade_registros=quantidade,
+        )
+    except Exception as erro:
+        registrar_evento(
+            "pipeline_fim",
+            id_execucao=id_execucao,
+            status="falha",
+            duracao_segundos=round(time.perf_counter() - inicio, 2),
+            erro=str(erro),
+        )
+        raise
 
 
 if __name__ == "__main__":

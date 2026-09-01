@@ -402,3 +402,105 @@ resource "google_billing_budget" "monthly" {
   threshold_rules { threshold_percent = 0.9 }
   threshold_rules { threshold_percent = 1.0 }
 }
+
+resource "google_logging_metric" "pipeline_sucesso" {
+  name        = "${local.prefix}-pipeline-sucesso"
+  description = "Quantidade de execuções finalizadas com sucesso."
+  filter      = "jsonPayload.tipo=\"pipeline_fim\" AND jsonPayload.status=\"sucesso\""
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+  }
+}
+
+resource "google_logging_metric" "pipeline_falha" {
+  name        = "${local.prefix}-pipeline-falha"
+  description = "Quantidade de execuções finalizadas com falha."
+  filter      = "jsonPayload.tipo=\"pipeline_fim\" AND jsonPayload.status=\"falha\""
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+  }
+}
+
+resource "google_monitoring_notification_channel" "email" {
+  count        = var.alert_email == null ? 0 : 1
+  display_name = "E-mail de alertas do pipeline"
+  type         = "email"
+  labels = {
+    email_address = var.alert_email
+  }
+}
+
+resource "google_monitoring_alert_policy" "pipeline_falha" {
+  display_name = "Falha nos pipelines de alfabetização"
+  combiner     = "OR"
+  enabled      = true
+
+  conditions {
+    display_name = "Falha no Batch Serverless"
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.pipeline_falha.name}\" AND resource.type=\"cloud_dataproc_batch\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Falha no Dataproc Streaming"
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.pipeline_falha.name}\" AND resource.type=\"cloud_dataproc_job\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Falha no cluster Dataproc"
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.pipeline_falha.name}\" AND resource.type=\"cloud_dataproc_cluster\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Falha no produtor Cloud Run"
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.pipeline_falha.name}\" AND resource.type=\"cloud_run_revision\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+    }
+  }
+
+  notification_channels = google_monitoring_notification_channel.email[*].name
+  alert_strategy {
+    auto_close = "1800s"
+  }
+
+  depends_on = [google_project_service.required]
+}

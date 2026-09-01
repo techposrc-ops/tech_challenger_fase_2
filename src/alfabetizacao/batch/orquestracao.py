@@ -2,8 +2,11 @@
 
 import argparse
 import os
+import time
+from uuid import uuid4
 
 from alfabetizacao.batch import bronze, gold, silver
+from alfabetizacao.observabilidade import registrar_evento
 
 
 def juntar_caminho(pasta, nome):
@@ -61,34 +64,119 @@ def executar_pipeline(
     pasta_raw=None,
     projeto_faturamento=None,
 ):
-
+    id_execucao = str(uuid4())
+    inicio_pipeline = time.perf_counter()
     pasta_bronze = juntar_caminho(pasta_base, "bronze")
     pasta_silver = juntar_caminho(pasta_base, "silver")
     pasta_gold = juntar_caminho(pasta_base, "gold")
-
-    resultado_bronze = bronze.executar(
-        spark=spark,
-        pasta_raw=pasta_raw,
-        pasta_bronze=pasta_bronze,
-        origem=origem,
-        projeto_faturamento=projeto_faturamento,
-    )
-    resultado_silver = silver.executar(
-        spark=spark,
-        pasta_bronze=pasta_bronze,
-        pasta_silver=pasta_silver,
-    )
-    resultado_gold = gold.executar(
-        spark=spark,
-        pasta_silver=pasta_silver,
-        pasta_gold=pasta_gold,
+    registrar_evento(
+        "pipeline_inicio",
+        "batch",
+        id_execucao=id_execucao,
+        ambiente=origem,
     )
 
-    return {
-        "bronze": resultado_bronze,
-        "silver": resultado_silver,
-        "gold": resultado_gold,
-    }
+    try:
+        inicio_camada = time.perf_counter()
+        resultado_bronze = bronze.executar(
+            spark=spark,
+            pasta_raw=pasta_raw,
+            pasta_bronze=pasta_bronze,
+            origem=origem,
+            projeto_faturamento=projeto_faturamento,
+        )
+        registros_bronze = sum(
+            tabela.get("registros", 0)
+            for tabela in resultado_bronze.values()
+            if isinstance(tabela, dict)
+        )
+        registrar_evento(
+            "camada_fim",
+            "batch",
+            id_execucao=id_execucao,
+            camada="bronze",
+            status="sucesso",
+            duracao_segundos=round(time.perf_counter() - inicio_camada, 2),
+            quantidade_registros=registros_bronze,
+        )
+
+        inicio_camada = time.perf_counter()
+        resultado_silver = silver.executar(
+            spark=spark,
+            pasta_bronze=pasta_bronze,
+            pasta_silver=pasta_silver,
+        )
+        tabelas_silver = [
+            tabela
+            for nome, tabela in resultado_silver.items()
+            if nome != "relacionamentos"
+        ]
+        registros_silver = sum(
+            tabela.get("registros_validos", 0)
+            for tabela in tabelas_silver
+            if isinstance(tabela, dict)
+        )
+        rejeitados_silver = sum(
+            tabela.get("registros_rejeitados", 0)
+            for tabela in tabelas_silver
+            if isinstance(tabela, dict)
+        )
+        registrar_evento(
+            "camada_fim",
+            "batch",
+            id_execucao=id_execucao,
+            camada="silver",
+            status="sucesso",
+            duracao_segundos=round(time.perf_counter() - inicio_camada, 2),
+            quantidade_registros=registros_silver,
+            quantidade_rejeitados=rejeitados_silver,
+        )
+
+        inicio_camada = time.perf_counter()
+        resultado_gold = gold.executar(
+            spark=spark,
+            pasta_silver=pasta_silver,
+            pasta_gold=pasta_gold,
+        )
+        registros_gold = sum(
+            tabela.get("registros", 0)
+            for tabela in resultado_gold.values()
+            if isinstance(tabela, dict)
+        )
+        registrar_evento(
+            "camada_fim",
+            "batch",
+            id_execucao=id_execucao,
+            camada="gold",
+            status="sucesso",
+            duracao_segundos=round(time.perf_counter() - inicio_camada, 2),
+            quantidade_registros=registros_gold,
+        )
+
+        resultado = {
+            "bronze": resultado_bronze,
+            "silver": resultado_silver,
+            "gold": resultado_gold,
+        }
+        registrar_evento(
+            "pipeline_fim",
+            "batch",
+            id_execucao=id_execucao,
+            status="sucesso",
+            duracao_segundos=round(time.perf_counter() - inicio_pipeline, 2),
+            quantidade_registros=registros_gold,
+        )
+        return resultado
+    except Exception as erro:
+        registrar_evento(
+            "pipeline_fim",
+            "batch",
+            id_execucao=id_execucao,
+            status="falha",
+            duracao_segundos=round(time.perf_counter() - inicio_pipeline, 2),
+            erro=str(erro),
+        )
+        raise
 
 
 def principal(argumentos=None):

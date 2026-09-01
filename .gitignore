@@ -31,8 +31,13 @@ streaming/events/
 !*/
 !/.gitignore
 !/.gcloudignore
+!/README.md
 !**/.gitkeep
+!/docs/finops.md
+!/docs/observabilidade.md
+!/scripts/*.py
 !/src/alfabetizacao/__init__.py
+!/src/alfabetizacao/observabilidade.py
 !/src/alfabetizacao/batch/*.py
 !/src/alfabetizacao/streaming/*.py
 !/cloud/gcp/dataproc/submit-batch.ps1

@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from flask import Flask, jsonify
 
+from alfabetizacao.observabilidade import registrar_evento
+
 UF_CODES = ("AC", "AL", "AM", "BA", "CE", "DF", "MG", "PA", "PE", "PR", "RJ", "RS", "SC", "SP")
 
 app = Flask(__name__)
@@ -132,15 +134,47 @@ def verificar_servico():
 @app.post("/produzir")
 def produzir():
     quantidade = int(os.getenv("EVENTS_PER_INVOCATION", "10"))
+    id_execucao = str(uuid4())
+    inicio = time.perf_counter()
+    registrar_evento(
+        "pipeline_inicio",
+        "streaming_produtor",
+        id_execucao=id_execucao,
+        quantidade_solicitada=quantidade,
+    )
     if quantidade < 1 or quantidade > 1000:
+        registrar_evento(
+            "pipeline_fim",
+            "streaming_produtor",
+            id_execucao=id_execucao,
+            status="falha",
+            duracao_segundos=round(time.perf_counter() - inicio, 2),
+            erro="Quantidade de eventos fora do intervalo permitido.",
+        )
         return jsonify({"erro": "EVENTS_PER_INVOCATION deve estar entre 1 e 1000."}), 400
 
     try:
         entregues = publicar_eventos(quantidade)
     except Exception as erro:
         app.logger.exception("Falha ao publicar eventos no Kafka.")
+        registrar_evento(
+            "pipeline_fim",
+            "streaming_produtor",
+            id_execucao=id_execucao,
+            status="falha",
+            duracao_segundos=round(time.perf_counter() - inicio, 2),
+            erro=str(erro),
+        )
         return jsonify({"erro": str(erro)}), 500
 
+    registrar_evento(
+        "pipeline_fim",
+        "streaming_produtor",
+        id_execucao=id_execucao,
+        status="sucesso",
+        duracao_segundos=round(time.perf_counter() - inicio, 2),
+        quantidade_registros=entregues,
+    )
     return jsonify({"topico": os.getenv("KAFKA_TOPIC"), "eventos_entregues": entregues})
 
 

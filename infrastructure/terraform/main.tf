@@ -20,6 +20,11 @@ locals {
     environment = var.environment
     managed_by  = "terraform"
   }
+  tabelas_gold = toset([
+    "indicadores_brasil",
+    "indicadores_uf",
+    "indicadores_municipio"
+  ])
   batch_apis = toset([
     "bigquery.googleapis.com",
     "compute.googleapis.com",
@@ -90,6 +95,23 @@ resource "google_bigquery_dataset" "alfabetizacao" {
   depends_on                 = [google_project_service.required]
 }
 
+resource "google_bigquery_table" "gold_externa" {
+  for_each            = local.tabelas_gold
+  dataset_id          = google_bigquery_dataset.alfabetizacao.dataset_id
+  table_id            = each.value
+  description         = "Tabela Gold em Parquet armazenada no Cloud Storage."
+  deletion_protection = false
+  labels              = local.labels
+
+  external_data_configuration {
+    autodetect    = true
+    source_format = "PARQUET"
+    source_uris = [
+      "gs://${google_storage_bucket.data_lake.name}/gold/${each.value}/*.parquet"
+    ]
+  }
+}
+
 resource "google_compute_network" "data" {
   name                    = "${local.prefix}-vpc"
   auto_create_subnetworks = false
@@ -104,6 +126,18 @@ resource "google_compute_subnetwork" "data" {
   private_ip_google_access = true
 }
 
+resource "google_compute_firewall" "dataproc_internal" {
+  name               = "${local.prefix}-dataproc-internal"
+  network            = google_compute_network.data.name
+  direction          = "INGRESS"
+  source_ranges      = [var.subnet_cidr]
+  destination_ranges = [var.subnet_cidr]
+
+  allow {
+    protocol = "all"
+  }
+}
+
 resource "google_service_account" "batch" {
   account_id   = substr("${local.prefix}-batch", 0, 30)
   display_name = "Pipeline Batch Bronze Silver Gold"
@@ -113,6 +147,7 @@ resource "google_service_account" "batch" {
 resource "google_project_iam_member" "batch_roles" {
   for_each = toset([
     "roles/bigquery.jobUser",
+    "roles/bigquery.readSessionUser",
     "roles/dataproc.worker",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",

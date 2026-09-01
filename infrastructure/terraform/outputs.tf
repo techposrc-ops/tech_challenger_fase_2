@@ -22,3 +22,6 @@ output "dataproc_cluster" {
 output "producer_url" {
   value = local.deploy_producer ? google_cloud_run_v2_service.producer[0].uri : null
 }
+output "pipeline_failure_alert" {
+  value = google_monitoring_alert_policy.pipeline_falha.display_name
+}

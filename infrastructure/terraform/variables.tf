@@ -82,6 +82,12 @@ variable "monthly_budget_usd" {
   type    = number
   default = 50
 }
+variable "alert_email" {
+  description = "E-mail opcional que receberá alertas de falha dos pipelines."
+  type        = string
+  default     = null
+  nullable    = true
+}
 variable "producer_image" {
   description = "Imagem do produtor no Artifact Registry; null não implanta Cloud Run/Scheduler."
   type        = string

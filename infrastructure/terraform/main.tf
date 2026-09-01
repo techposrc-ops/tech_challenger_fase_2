@@ -10,10 +10,28 @@ data "google_project" "current" {
 locals {
   prefix      = "${var.project_name}-${var.environment}"
   bucket_name = "${local.prefix}-${data.google_project.current.number}"
-  deploy_producer = (
+  create_kafka = (
     var.enable_streaming
+    || var.enable_kafka
+  )
+  create_streaming_runtime = (
+    var.enable_streaming
+    || var.enable_streaming_producer
+    || var.enable_streaming_consumer
+  )
+  deploy_producer = (
+    (var.enable_streaming || var.enable_streaming_producer)
+    && local.create_kafka
     && var.producer_image != null
     && var.kafka_bootstrap_servers != null
+  )
+  deploy_consumer = (
+    var.enable_streaming
+    || var.enable_streaming_consumer
+  )
+  deploy_orchestration = (
+    (var.enable_streaming || var.enable_streaming_orchestration)
+    && local.deploy_producer
   )
   labels = {
     project     = var.project_name
@@ -26,7 +44,9 @@ locals {
     "indicadores_municipio"
   ])
   batch_apis = toset([
+    "artifactregistry.googleapis.com",
     "bigquery.googleapis.com",
+    "cloudbuild.googleapis.com",
     "compute.googleapis.com",
     "dataproc.googleapis.com",
     "iam.googleapis.com",
@@ -36,9 +56,13 @@ locals {
     "storage.googleapis.com"
   ])
   streaming_apis = toset([
-    "cloudscheduler.googleapis.com",
     "managedkafka.googleapis.com",
+  ])
+  producer_apis = toset([
     "run.googleapis.com",
+  ])
+  orchestration_apis = toset([
+    "cloudscheduler.googleapis.com",
     "workflows.googleapis.com"
   ])
   billing_apis = toset([
@@ -46,7 +70,9 @@ locals {
   ])
   apis = setunion(
     local.batch_apis,
-    var.enable_streaming ? local.streaming_apis : toset([]),
+    local.create_kafka ? local.streaming_apis : toset([]),
+    local.deploy_producer ? local.producer_apis : toset([]),
+    local.deploy_orchestration ? local.orchestration_apis : toset([]),
     var.billing_account_id != null ? local.billing_apis : toset([])
   )
 }
@@ -56,6 +82,24 @@ resource "google_project_service" "required" {
   project            = var.gcp_project_id
   service            = each.value
   disable_on_destroy = false
+}
+
+resource "google_artifact_registry_repository" "docker" {
+  location      = var.gcp_region
+  repository_id = var.artifact_registry_repository
+  description   = "Imagens Docker do projeto de alfabetização."
+  format        = "DOCKER"
+  labels        = local.labels
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_project_iam_member" "cloud_build_builder" {
+  project = var.gcp_project_id
+  role    = "roles/cloudbuild.builds.builder"
+  member  = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_storage_bucket" "data_lake" {
@@ -165,27 +209,32 @@ resource "google_bigquery_dataset_iam_member" "batch_editor" {
 }
 
 resource "google_service_account" "streaming" {
-  count        = var.enable_streaming ? 1 : 0
+  count        = local.create_streaming_runtime ? 1 : 0
   account_id   = substr("${local.prefix}-stream", 0, 30)
   display_name = "Pipeline de streaming"
 }
 
 resource "google_project_iam_member" "streaming_roles" {
-  for_each = var.enable_streaming ? toset([
-    "roles/managedkafka.client",
-    "roles/iam.serviceAccountTokenCreator",
-    "roles/iam.serviceAccountOpenIdTokenCreator",
-    "roles/storage.objectAdmin",
-    "roles/logging.logWriter",
-    "roles/monitoring.metricWriter"
-  ]) : toset([])
+  for_each = local.create_streaming_runtime ? setunion(
+    toset([
+      "roles/managedkafka.client",
+      "roles/iam.serviceAccountTokenCreator",
+      "roles/iam.serviceAccountOpenIdTokenCreator"
+    ]),
+    local.deploy_consumer ? toset([
+      "roles/dataproc.worker",
+      "roles/storage.objectAdmin",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter"
+    ]) : toset([])
+  ) : toset([])
   project = var.gcp_project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.streaming[0].email}"
 }
 
 resource "google_managed_kafka_cluster" "streaming" {
-  count      = var.enable_streaming ? 1 : 0
+  count      = local.create_kafka ? 1 : 0
   cluster_id = "${local.prefix}-kafka"
   location   = var.gcp_region
   labels     = local.labels
@@ -202,7 +251,7 @@ resource "google_managed_kafka_cluster" "streaming" {
 }
 
 resource "google_managed_kafka_topic" "alfabetizacao" {
-  count              = var.enable_streaming ? 1 : 0
+  count              = local.create_kafka ? 1 : 0
   topic_id           = var.kafka_topic
   cluster            = google_managed_kafka_cluster.streaming[0].cluster_id
   location           = var.gcp_region
@@ -211,7 +260,7 @@ resource "google_managed_kafka_topic" "alfabetizacao" {
 }
 
 resource "google_dataproc_cluster" "streaming" {
-  count  = var.enable_streaming ? 1 : 0
+  count  = local.deploy_consumer ? 1 : 0
   name   = "${local.prefix}-spark"
   region = var.gcp_region
   labels = local.labels
@@ -243,8 +292,29 @@ resource "google_dataproc_cluster" "streaming" {
   depends_on = [google_project_iam_member.streaming_roles]
 }
 
+resource "google_compute_router" "streaming" {
+  count   = local.deploy_consumer ? 1 : 0
+  name    = "${local.prefix}-streaming-router"
+  region  = var.gcp_region
+  network = google_compute_network.data.id
+}
+
+resource "google_compute_router_nat" "streaming" {
+  count                              = local.deploy_consumer ? 1 : 0
+  name                               = "${local.prefix}-streaming-nat"
+  router                             = google_compute_router.streaming[0].name
+  region                             = var.gcp_region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+
+  subnetwork {
+    name                    = google_compute_subnetwork.data.id
+    source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
+  }
+}
+
 resource "google_service_account" "orchestrator" {
-  count        = var.enable_streaming ? 1 : 0
+  count        = local.deploy_orchestration ? 1 : 0
   account_id   = substr("${local.prefix}-orchestrator", 0, 30)
   display_name = "Agendamento e orquestração"
 }
@@ -283,7 +353,7 @@ resource "google_cloud_run_v2_service" "producer" {
 }
 
 resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
-  count    = local.deploy_producer ? 1 : 0
+  count    = local.deploy_orchestration ? 1 : 0
   project  = var.gcp_project_id
   location = var.gcp_region
   name     = google_cloud_run_v2_service.producer[0].name
@@ -292,7 +362,7 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
 }
 
 resource "google_cloud_scheduler_job" "producer" {
-  count     = local.deploy_producer ? 1 : 0
+  count     = local.deploy_orchestration ? 1 : 0
   name      = "${local.prefix}-producer"
   region    = var.gcp_region
   schedule  = "0 * * * *"
@@ -309,7 +379,7 @@ resource "google_cloud_scheduler_job" "producer" {
 }
 
 resource "google_workflows_workflow" "pipeline" {
-  count           = local.deploy_producer ? 1 : 0
+  count           = local.deploy_orchestration ? 1 : 0
   name            = "${local.prefix}-pipeline"
   region          = var.gcp_region
   service_account = google_service_account.orchestrator[0].email

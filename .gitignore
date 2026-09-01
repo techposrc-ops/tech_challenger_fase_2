@@ -30,10 +30,16 @@ streaming/events/
 *
 !*/
 !/.gitignore
+!/.gcloudignore
 !**/.gitkeep
 !/src/alfabetizacao/__init__.py
 !/src/alfabetizacao/batch/*.py
+!/src/alfabetizacao/streaming/*.py
 !/cloud/gcp/dataproc/submit-batch.ps1
+!/cloud/gcp/dataproc/submit-streaming.ps1
+!/cloud/gcp/dataproc/streaming.properties
+!/cloud/gcp/cloud_run/Dockerfile
+!/cloud/gcp/cloud_build/produtor.yaml
 !/infrastructure/terraform/*.tf
 !/infrastructure/terraform/.terraform.lock.hcl
 tests/

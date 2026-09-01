@@ -20,6 +20,11 @@ locals {
     environment = var.environment
     managed_by  = "terraform"
   }
+  tabelas_gold = toset([
+    "indicadores_brasil",
+    "indicadores_uf",
+    "indicadores_municipio"
+  ])
   batch_apis = toset([
     "bigquery.googleapis.com",
     "compute.googleapis.com",
@@ -88,6 +93,23 @@ resource "google_bigquery_dataset" "alfabetizacao" {
   delete_contents_on_destroy = false
   labels                     = local.labels
   depends_on                 = [google_project_service.required]
+}
+
+resource "google_bigquery_table" "gold_externa" {
+  for_each            = local.tabelas_gold
+  dataset_id          = google_bigquery_dataset.alfabetizacao.dataset_id
+  table_id            = each.value
+  description         = "Tabela Gold em Parquet armazenada no Cloud Storage."
+  deletion_protection = false
+  labels              = local.labels
+
+  external_data_configuration {
+    autodetect    = true
+    source_format = "PARQUET"
+    source_uris = [
+      "gs://${google_storage_bucket.data_lake.name}/gold/${each.value}/*.parquet"
+    ]
+  }
 }
 
 resource "google_compute_network" "data" {

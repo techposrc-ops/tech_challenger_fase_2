@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from pyspark.sql.functions import col, current_timestamp, lit, max, trim, when
 
 CHAVES_TABELAS = {
@@ -281,6 +283,82 @@ def validar_relacionamentos(tabelas_silver):
     }
 
 
+def criar_relatorio_qualidade(resultado):
+    """Organiza as validações em linhas simples para consulta."""
+    linhas = []
+
+    for nome_tabela in CHAVES_TABELAS:
+        dados = resultado[nome_tabela]
+        linhas.append(
+            {
+                "tabela": nome_tabela,
+                "registros": dados["registros"],
+                "registros_validos": dados["registros_validos"],
+                "registros_rejeitados": dados["registros_rejeitados"],
+                "duplicidades": dados["duplicidades"],
+                "chaves_nulas": dados["chaves_nulas"],
+                "percentuais_invalidos": dados["percentuais_invalidos"],
+                "erros_relacionamento": 0,
+            }
+        )
+
+    relacionamentos = resultado["relacionamentos"]
+    linhas.append(
+        {
+            "tabela": "relacionamentos",
+            "registros": 0,
+            "registros_validos": 0,
+            "registros_rejeitados": 0,
+            "duplicidades": 0,
+            "chaves_nulas": 0,
+            "percentuais_invalidos": 0,
+            "erros_relacionamento": sum(relacionamentos.values()),
+        }
+    )
+    return linhas
+
+
+def encontrar_erros_criticos(resultado):
+    """Retorna problemas que impedem a construção segura da Gold."""
+    erros = []
+
+    for nome_tabela in CHAVES_TABELAS:
+        if nome_tabela not in resultado:
+            erros.append(f"Tabela ausente: {nome_tabela}")
+        elif resultado[nome_tabela]["registros_validos"] == 0:
+            erros.append(f"Tabela sem registros válidos: {nome_tabela}")
+
+    relacionamentos = resultado.get("relacionamentos", {})
+    if relacionamentos.get("alunos_sem_municipio", 0) > 0:
+        erros.append("Existem alunos sem município correspondente")
+    if relacionamentos.get("municipios_sem_uf", 0) > 0:
+        erros.append("Existem municípios sem UF correspondente")
+
+    return erros
+
+
+def validar_erros_criticos(resultado):
+    """Interrompe o pipeline quando a qualidade compromete a camada Gold."""
+    erros = encontrar_erros_criticos(resultado)
+    if erros:
+        raise ValueError("Erros críticos de qualidade: " + "; ".join(erros))
+
+
+def salvar_relatorio_qualidade(spark, pasta_silver, id_execucao, resultado):
+    """Grava as métricas de qualidade em Parquet para cada execução."""
+    caminho = juntar_caminho(
+        pasta_silver,
+        f"_qualidade/id_execucao={id_execucao}",
+    )
+    dataframe = (
+        spark.createDataFrame(criar_relatorio_qualidade(resultado))
+        .withColumn("id_execucao", lit(id_execucao))
+        .withColumn("data_execucao", current_timestamp())
+    )
+    dataframe.write.mode("overwrite").parquet(caminho)
+    return caminho
+
+
 def ler_carga_mais_recente(spark, pasta_bronze, nome_tabela):
     caminho = juntar_caminho(
         pasta_bronze,
@@ -298,9 +376,10 @@ def ler_carga_mais_recente(spark, pasta_bronze, nome_tabela):
     return dataframe.filter(col("_data_ingestao") == data_mais_recente)
 
 
-def executar(spark, pasta_bronze, pasta_silver):
+def executar(spark, pasta_bronze, pasta_silver, id_execucao=None):
     resultado = {}
     tabelas_silver = {}
+    id_execucao = id_execucao or str(uuid4())
 
     for nome_tabela in CHAVES_TABELAS:
         dataframe_bronze = ler_carga_mais_recente(
@@ -308,6 +387,7 @@ def executar(spark, pasta_bronze, pasta_silver):
             pasta_bronze,
             nome_tabela,
         )
+        validacao_inicial = validar_tabela(nome_tabela, dataframe_bronze)
         dataframe_tratado = tratar_tabela(nome_tabela, dataframe_bronze)
         dataframe_validado = adicionar_validacao(
             nome_tabela,
@@ -333,9 +413,19 @@ def executar(spark, pasta_bronze, pasta_silver):
             "caminho_rejeitados": caminho_rejeitados,
             "registros_validos": dataframe_silver.count(),
             "registros_rejeitados": dataframe_rejeitados.count(),
-            **validar_tabela(nome_tabela, dataframe_validado),
+            **validacao_inicial,
         }
 
     resultado["relacionamentos"] = validar_relacionamentos(tabelas_silver)
+    resultado["qualidade"] = {
+        "id_execucao": id_execucao,
+        "caminho": salvar_relatorio_qualidade(
+            spark,
+            pasta_silver,
+            id_execucao,
+            resultado,
+        ),
+        "erros_criticos": encontrar_erros_criticos(resultado),
+    }
 
     return resultado

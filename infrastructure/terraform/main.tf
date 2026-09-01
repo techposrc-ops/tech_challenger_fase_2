@@ -104,6 +104,18 @@ resource "google_compute_subnetwork" "data" {
   private_ip_google_access = true
 }
 
+resource "google_compute_firewall" "dataproc_internal" {
+  name               = "${local.prefix}-dataproc-internal"
+  network            = google_compute_network.data.name
+  direction          = "INGRESS"
+  source_ranges      = [var.subnet_cidr]
+  destination_ranges = [var.subnet_cidr]
+
+  allow {
+    protocol = "all"
+  }
+}
+
 resource "google_service_account" "batch" {
   account_id   = substr("${local.prefix}-batch", 0, 30)
   display_name = "Pipeline Batch Bronze Silver Gold"
@@ -113,6 +125,7 @@ resource "google_service_account" "batch" {
 resource "google_project_iam_member" "batch_roles" {
   for_each = toset([
     "roles/bigquery.jobUser",
+    "roles/bigquery.readSessionUser",
     "roles/dataproc.worker",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",

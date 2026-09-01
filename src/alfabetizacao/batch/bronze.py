@@ -31,7 +31,7 @@ TABELAS_BIGQUERY = {
     "meta_alfabetizacao_uf": "meta_alfabetizacao_uf",
     "meta_alfabetizacao_municipio": "meta_alfabetizacao_municipio",
     "municipio": "municipio",
-    "alunos": "aluno",
+    "alunos": "alunos",
 }
 
 

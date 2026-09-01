@@ -61,19 +61,24 @@ $DataHora = Get-Date -Format "yyyyMMdd-HHmmss"
 $NomeLote = "alfabetizacao-batch-$DataHora".ToLower()
 
 Write-Host "Iniciando o lote $NomeLote..."
-gcloud dataproc batches submit pyspark `
-    "$PastaCodigoGcs/orquestracao.py" `
-    --project=$Projeto `
-    --region=$Regiao `
-    --batch=$NomeLote `
-    --service-account=$ContaServico `
-    --subnet=$Subrede `
-    --deps-bucket=$Bucket `
-    --py-files="$PastaCodigoGcs/alfabetizacao.zip" `
-    -- `
-    --ambiente cloud `
-    --pasta-base "gs://$Bucket" `
-    --projeto-faturamento $Projeto
+$ArgumentosDataproc = @(
+    "dataproc", "batches", "submit", "pyspark",
+    "$PastaCodigoGcs/orquestracao.py",
+    "--project=$Projeto",
+    "--region=$Regiao",
+    "--batch=$NomeLote",
+    "--version=2.2",
+    "--service-account=$ContaServico",
+    "--subnet=$Subrede",
+    "--deps-bucket=$Bucket",
+    "--py-files=$PastaCodigoGcs/alfabetizacao.zip",
+    "--",
+    "--ambiente", "cloud",
+    "--pasta-base", "gs://$Bucket",
+    "--projeto-faturamento", $Projeto
+)
+
+gcloud @ArgumentosDataproc
 
 if ($LASTEXITCODE -ne 0) {
     throw "O lote do Dataproc terminou com erro."

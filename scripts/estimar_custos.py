@@ -1,7 +1,7 @@
 """Estimativa simples dos principais custos usados no projeto."""
 
 import argparse
-
+# As variáveis foram baseadas nas páginas oficiais de preços do Google Cloud para a região us-central1
 PRECO_DCU_DATAPROC_SERVERLESS = 0.06
 PRECO_SHUFFLE_GIB_HORA = 0.000054795
 PRECO_VM_E2_STANDARD_2_HORA = 0.06701142
@@ -41,11 +41,15 @@ def calcular_storage_mes(volume_gib):
 
 
 def ler_argumentos():
-    analisador = argparse.ArgumentParser(description="Estima custos do teste na GCP em USD.")
-    analisador.add_argument("--milli-dcu-segundos", type=float, default=2_002_650)
-    analisador.add_argument("--shuffle-gib-segundos", type=float, default=202_800)
+    analisador = argparse.ArgumentParser(
+        description="Estima custos do teste na GCP em USD.")
+    analisador.add_argument("--milli-dcu-segundos",
+                            type=float, default=2_002_650)
+    analisador.add_argument("--shuffle-gib-segundos",
+                            type=float, default=202_800)
     analisador.add_argument("--horas-kafka", type=float, default=1)
-    analisador.add_argument("--horas-dataproc-streaming", type=float, default=0.5)
+    analisador.add_argument("--horas-dataproc-streaming",
+                            type=float, default=0.5)
     analisador.add_argument("--volume-storage-gib", type=float, default=0.13)
     return analisador.parse_args()
 

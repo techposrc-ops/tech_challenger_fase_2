@@ -31,8 +31,15 @@ streaming/events/
 !*/
 !/.gitignore
 !/.gcloudignore
+!/.env.example
+!/pyproject.toml
 !/README.md
 !**/.gitkeep
+!/cloud/gcp/README.md
+!/cloud/gcp/workflows/pipeline.yaml
+!/docs/architecture.md
+!/docs/data_dictionary.md
+!/docs/estrategia.md
 !/docs/finops.md
 !/docs/observabilidade.md
 !/scripts/*.py
@@ -47,7 +54,20 @@ streaming/events/
 !/cloud/gcp/cloud_build/produtor.yaml
 !/infrastructure/terraform/*.tf
 !/infrastructure/terraform/.terraform.lock.hcl
+!/infrastructure/terraform/README.md
+!/infrastructure/terraform/terraform.tfvars.example
+!/notebooks/README.md
+
+# Documentos internos e arquivos somente locais
+/docs/checklist_progresso.md
+/docs/publicacao_git.md
+/docs/status_entrega.md
 tests/
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+*.tfplan
+.env
 infrastructure/terraform/terraform.tfvars
 infrastructure/terraform/.terraform/
 infrastructure/terraform/*.tfstate

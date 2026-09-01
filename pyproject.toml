@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tech-challenge-alfabetizacao"
+version = "0.1.0"
+description = "Pipeline híbrido para análise da alfabetização no Brasil"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "google-cloud-bigquery>=3.25,<4",
+  "pandas>=2.2,<3",
+  "pyarrow>=17,<20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9", "ruff>=0.6,<1"]
+notebooks = ["jupyterlab>=4.2,<5", "matplotlib>=3.9,<4", "pyspark>=3.5,<4"]
+streaming = [
+  "confluent-kafka>=2.6,<3",
+  "flask>=3.0,<4",
+  "google-auth>=2.35,<3",
+  "gunicorn>=23,<24",
+  "pyspark>=3.5,<4",
+  "requests>=2.32,<3",
+  "urllib3>=2.2,<3",
+]
+
+[project.scripts]
+alfabetizacao-stream-simulator = "alfabetizacao.streaming.simulator:principal"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

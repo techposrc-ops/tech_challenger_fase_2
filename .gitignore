@@ -31,5 +31,16 @@ streaming/events/
 !*/
 !/.gitignore
 !**/.gitkeep
+!/src/alfabetizacao/__init__.py
+!/src/alfabetizacao/batch/*.py
+!/cloud/gcp/dataproc/submit-batch.ps1
+!/configs/pipeline.yaml
+!/infrastructure/terraform/*.tf
+!/infrastructure/terraform/.terraform.lock.hcl
+tests/
+infrastructure/terraform/terraform.tfvars
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
 /.venv/
 /tmp/

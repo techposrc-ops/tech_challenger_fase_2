@@ -34,7 +34,6 @@ streaming/events/
 !/src/alfabetizacao/__init__.py
 !/src/alfabetizacao/batch/*.py
 !/cloud/gcp/dataproc/submit-batch.ps1
-!/configs/pipeline.yaml
 !/infrastructure/terraform/*.tf
 !/infrastructure/terraform/.terraform.lock.hcl
 tests/

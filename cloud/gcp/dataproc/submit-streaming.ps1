@@ -6,13 +6,16 @@ param(
     [Parameter(Mandatory = $true)][string]$ServidoresKafka
 )
 
+$RaizProjeto = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
+$ArquivoPropriedades = Join-Path $RaizProjeto "cloud\gcp\dataproc\streaming.properties"
+
 $argumentos = @(
     "dataproc", "jobs", "submit", "pyspark",
     "gs://$Bucket/jobs/spark_job.py",
     "--project=$IdProjeto",
     "--region=$Regiao",
     "--cluster=$Cluster",
-    "--properties-file=cloud/gcp/dataproc/streaming.properties",
+    "--properties-file=$ArquivoPropriedades",
     "--",
     "--bootstrap-servers", $ServidoresKafka,
     "--topic", "alfabetizacao-indicadores",

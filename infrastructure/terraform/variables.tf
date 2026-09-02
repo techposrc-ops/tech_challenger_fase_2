@@ -24,6 +24,11 @@ variable "artifact_registry_repository" {
   type        = string
   default     = "alfabetizacao"
 }
+variable "enable_gold_tables" {
+  description = "Registra as tabelas Gold externas após a geração dos arquivos Parquet."
+  type        = bool
+  default     = true
+}
 variable "enable_streaming" {
   description = "Compatibilidade: ativa todos os recursos de streaming. Prefira os controles separados."
   type        = bool

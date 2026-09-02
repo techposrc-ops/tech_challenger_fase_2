@@ -140,7 +140,7 @@ resource "google_bigquery_dataset" "alfabetizacao" {
 }
 
 resource "google_bigquery_table" "gold_externa" {
-  for_each            = local.tabelas_gold
+  for_each            = var.enable_gold_tables ? local.tabelas_gold : toset([])
   dataset_id          = google_bigquery_dataset.alfabetizacao.dataset_id
   table_id            = each.value
   description         = "Tabela Gold em Parquet armazenada no Cloud Storage."

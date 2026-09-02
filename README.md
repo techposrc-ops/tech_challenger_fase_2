@@ -277,16 +277,47 @@ representam a organização lógica do Data Lake e são preenchidas pela execuç
 
 ## Preparação do ambiente local
 
-Requisitos: Python 3.11, Java compatível com PySpark e Git.
+Requisitos: Python 3.11, Java 17 e Git.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev,notebooks,streaming]"
+python -m pip install -e ".[batch]"
+```
+
+Instale apenas os grupos necessários para cada atividade:
+
+```powershell
+# Qualidade e verificações locais
+python -m pip install -e ".[dev]"
+
+# Jupyter, gráficos e PySpark
+python -m pip install -e ".[notebooks]"
+
+# Produtor Kafka e consumidor Streaming
+python -m pip install -e ".[streaming]"
 ```
 
 Selecione o interpretador `.venv` como kernel dos notebooks.
+
+### PySpark no Windows
+
+No Windows nativo, o Hadoop usado pelo PySpark precisa encontrar `winutils.exe` para gravar arquivos
+Parquet. Instale uma distribuição Hadoop compatível, deixe o executável em
+`C:\hadoop\bin\winutils.exe` e configure a sessão antes de iniciar o pipeline:
+
+```powershell
+$env:HADOOP_HOME="C:\hadoop"
+$env:Path="$env:HADOOP_HOME\bin;$env:Path"
+$env:PYSPARK_PYTHON=(Resolve-Path ".\.venv\Scripts\python.exe").Path
+$env:PYSPARK_DRIVER_PYTHON=$env:PYSPARK_PYTHON
+Test-Path "$env:HADOOP_HOME\bin\winutils.exe"
+```
+
+O último comando deve retornar `True`. Como alternativa, execute o projeto em Linux ou WSL, onde
+o `winutils.exe` não é necessário. Essa configuração é usada somente no desenvolvimento local; os
+jobs do Dataproc já executam em ambiente Linux gerenciado pela GCP.
 
 ## Execução local
 
@@ -310,6 +341,58 @@ Os notebooks apresentam a evolução didática do projeto: exploração inicial 
 camadas Bronze, Silver e Gold.
 
 ## Implantação na GCP
+
+### Execução automatizada
+
+O script `scripts/executar_gcp.ps1` reúne as verificações, o Terraform e os comandos de execução.
+Primeiro, autentique sua própria conta:
+
+```powershell
+gcloud auth login
+gcloud auth application-default login
+```
+
+Para apenas gerar e revisar o plano, sem criar recursos:
+
+```powershell
+.\scripts\executar_gcp.ps1 `
+  -Projeto "SEU_PROJECT_ID" `
+  -Etapa planejar
+```
+
+Para criar a infraestrutura, executar Bronze, Silver e Gold e registrar as tabelas no BigQuery:
+
+```powershell
+.\scripts\executar_gcp.ps1 `
+  -Projeto "SEU_PROJECT_ID" `
+  -Etapa batch `
+  -ConfirmarCustos
+```
+
+Depois de validar o Batch, o teste completo de Streaming pode ser executado com:
+
+```powershell
+.\scripts\executar_gcp.ps1 `
+  -Projeto "SEU_PROJECT_ID" `
+  -Etapa streaming `
+  -ConfirmarCustos
+```
+
+Ao terminar a demonstração, remova Kafka, Cloud Run, Scheduler, Workflows e o cluster Dataproc:
+
+```powershell
+.\scripts\executar_gcp.ps1 `
+  -Projeto "SEU_PROJECT_ID" `
+  -Etapa desligar-streaming `
+  -ConfirmarCustos
+```
+
+O bucket do estado usa, por padrão, o nome `SEU_PROJECT_ID-tfstate`. Para usar outro bucket,
+informe `-BucketEstado "NOME_DO_BUCKET"`. O script cria `terraform.tfvars` localmente quando ele
+ainda não existe; esse arquivo permanece ignorado pelo Git.
+
+O parâmetro `-ConfirmarCustos` é obrigatório nas etapas que criam ou removem recursos. O modo
+`planejar` não executa `terraform apply`.
 
 ### 1. Autenticação
 

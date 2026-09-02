@@ -44,9 +44,13 @@ disponibilizado pelo INEP por meio da Base dos Dados. A pipeline integra as tabe
 | `municipio` | Indicadores territoriais municipais |
 | `alunos` | Microdados educacionais |
 
-Na execução local, os arquivos originais baixados do INEP podem ser colocados em
-`data/arquivos_raw`. Eles foram versionados para permitir a reprodução acadêmica local, mas não são
-usados na nuvem. Na GCP, a Bronze lê diretamente as tabelas públicas pelo conector do BigQuery.
+O desenvolvimento do projeto começou localmente com os arquivos CSV originais baixados do INEP e
+armazenados em `data/arquivos_raw`. Esses arquivos foram usados na exploração inicial dos dados, na
+construção dos notebooks e na criação e validação das camadas Bronze, Silver e Gold antes da
+implantação em nuvem. Eles permanecem versionados para permitir a reprodução acadêmica local.
+
+Na GCP, os CSVs locais não são utilizados: a Bronze lê diretamente as seis tabelas públicas da
+Base dos Dados pelo conector do BigQuery.
 
 ## Arquitetura da solução
 

@@ -31,6 +31,7 @@ streaming/events/
 !*/
 !/.gitignore
 !/.gcloudignore
+!/.gitattributes
 !/.env.example
 !/pyproject.toml
 !/README.md
@@ -58,6 +59,8 @@ streaming/events/
 !/infrastructure/terraform/README.md
 !/infrastructure/terraform/terraform.tfvars.example
 !/notebooks/README.md
+!/entrega/README_Tech_Challenge_Fase_2.pdf
+!/video_apresentacao/apresentacao_projeto.mp4
 
 # Documentos internos e arquivos somente locais
 /docs/checklist_progresso.md

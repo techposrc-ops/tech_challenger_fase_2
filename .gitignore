@@ -43,6 +43,7 @@ streaming/events/
 !/docs/finops.md
 !/docs/observabilidade.md
 !/scripts/*.py
+!/scripts/*.ps1
 !/src/alfabetizacao/__init__.py
 !/src/alfabetizacao/observabilidade.py
 !/src/alfabetizacao/batch/*.py

@@ -44,9 +44,13 @@ disponibilizado pelo INEP por meio da Base dos Dados. A pipeline integra as tabe
 | `municipio` | Indicadores territoriais municipais |
 | `alunos` | Microdados educacionais |
 
-Na execução local, os arquivos originais baixados do INEP podem ser colocados em
-`data/arquivos_raw`. Eles são usados somente para desenvolvimento e não são publicados no Git. Na
-GCP, a Bronze lê diretamente as tabelas públicas pelo conector do BigQuery.
+O desenvolvimento do projeto começou localmente com os arquivos CSV originais baixados do INEP e
+armazenados em `data/arquivos_raw`. Esses arquivos foram usados na exploração inicial dos dados, na
+construção dos notebooks e na criação e validação das camadas Bronze, Silver e Gold antes da
+implantação em nuvem. Eles permanecem versionados para permitir a reprodução acadêmica local.
+
+Na GCP, os CSVs locais não são utilizados: a Bronze lê diretamente as seis tabelas públicas da
+Base dos Dados pelo conector do BigQuery.
 
 ## Arquitetura da solução
 
@@ -335,7 +339,11 @@ configurações locais e não deve ser enviado ao Git.
 Na raiz do projeto:
 
 ```powershell
-.\cloud\gcp\dataproc\submit-batch.ps1 -Executar
+.\cloud\gcp\dataproc\submit-batch.ps1 `
+  -Projeto "SEU_PROJECT_ID" `
+  -Bucket "SEU_BUCKET" `
+  -ContaServico "SUA_SERVICE_ACCOUNT" `
+  -Executar
 ```
 
 O job lê as fontes públicas do BigQuery, grava Bronze, Silver e Gold no Cloud Storage e permite o

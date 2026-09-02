@@ -1,6 +1,7 @@
 """Estimativa simples dos principais custos usados no projeto."""
 
 import argparse
+
 # As variáveis foram baseadas nas páginas oficiais de preços do Google Cloud para a região us-central1
 PRECO_DCU_DATAPROC_SERVERLESS = 0.06
 PRECO_SHUFFLE_GIB_HORA = 0.000054795

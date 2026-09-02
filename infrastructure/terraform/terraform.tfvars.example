@@ -1,12 +1,12 @@
 gcp_project_id = "meu-projeto-gcp"
-gcp_region     = "southamerica-east1"
+gcp_region     = "us-central1"
 environment    = "dev"
 enable_streaming               = false
 enable_kafka                   = false # ative somente durante o teste
 enable_streaming_producer      = false
 enable_streaming_consumer      = false
 enable_streaming_orchestration = false
-# producer_image = "southamerica-east1-docker.pkg.dev/meu-projeto-gcp/pipeline/produtor:latest"
+# producer_image = "us-central1-docker.pkg.dev/meu-projeto-gcp/alfabetizacao/produtor:latest"
 # kafka_bootstrap_servers = "endereco-bootstrap-obtido-na-gcp"
 # billing_account_id = "000000-000000-000000"
 # alert_email = "seu-email@exemplo.com"
